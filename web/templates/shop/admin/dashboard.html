@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Админ-панель - Спортивный магазин{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Админ-панель</h2>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'shop:home' %}">Главная</a></li>
+            <li class="breadcrumb-item active">Админ-панель</li>
+        </ol>
+    </nav>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Общая выручка</h5>
+                <h2 class="mb-0">{{ stats.total_revenue|default:0 }} ₽</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Всего заказов</h5>
+                <h2 class="mb-0">{{ stats.total_orders|default:0 }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Всего пользователей</h5>
+                <h2 class="mb-0">{{ stats.active_users|default:0 }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Навигация по разделам -->
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-box-seam"></i> Товары
+                </h5>
+                <p class="card-text">Управление товарами</p>
+                <a href="{% url 'shop:admin_products' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-tags"></i> Категории
+                </h5>
+                <p class="card-text">Управление категориями</p>
+                <a href="{% url 'shop:admin_categories' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-people"></i> Пользователи
+                </h5>
+                <p class="card-text">Управление пользователями</p>
+                <a href="{% url 'shop:admin_users' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-cart-check"></i> Заказы
+                </h5>
+                <p class="card-text">Управление заказами</p>
+                <a href="{% url 'shop:admin_orders' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-credit-card"></i> Транзакции
+                </h5>
+                <p class="card-text">Управление транзакциями</p>
+                <a href="{% url 'shop:admin_transactions' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-cart"></i> Корзина
+                </h5>
+                <p class="card-text">Управление корзиной</p>
+                <a href="{% url 'shop:admin_cart_items' %}" class="btn btn-primary">Управление</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-journal-text"></i> Операционные логи
+                </h5>
+                <p class="card-text">Просмотр операционных логов системы</p>
+                <a href="{% url 'shop:admin_logs' %}" class="btn btn-primary">Просмотр</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-shield-check"></i> Аудит-лог
+                </h5>
+                <p class="card-text">Просмотр журнала аудита</p>
+                <a href="{% url 'shop:admin_audit' %}" class="btn btn-primary">Просмотр</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card border-info">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-database"></i> Резервные копии
+                </h5>
+                <p class="card-text">Управление бекапами БД</p>
+                <a href="{% url 'shop:admin_backups' %}" class="btn btn-info text-white">Управление</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 d-flex gap-2">
+    <a href="{% url 'shop:analytics_dashboard' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-graph-up"></i> Аналитика
+    </a>
+    <a href="{% url 'shop:admin_backups' %}" class="btn btn-outline-info">
+        <i class="bi bi-database-add"></i> Создать бекап
+    </a>
+</div>
+{% endblock %}
+

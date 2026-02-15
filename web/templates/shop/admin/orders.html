@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+
+{% block title %}Управление заказами - Админ-панель{% endblock %}
+
+{% block extra_head %}
+{% if request.session.access_token %}
+<meta name="access-token" content="{{ request.session.access_token }}">
+{% endif %}
+<meta name="api-base-url" content="{{ api_base_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление заказами</h2>
+    <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">Назад</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if orders %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Пользователь</th>
+                        <th>Сумма</th>
+                        <th>Статус</th>
+                        <th>Дата заказа</th>
+                        <th>Адрес доставки</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>{{ order.id }}</td>
+                        <td>
+                            {% if order.user_username %}
+                                {{ order.user_username }}
+                            {% elif order.user %}
+                                {% if order.user.username %}
+                                    {{ order.user.username }}
+                                {% elif order.user.id %}
+                                    ID: {{ order.user.id }}
+                                {% else %}
+                                    ID: {{ order.user }}
+                                {% endif %}
+                            {% else %}
+                                ID: {{ order.user|default:"-" }}
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ order.total_amount }} ₽</strong></td>
+                        <td>
+                            {% if order.status == 'Pending' %}
+                            <span class="badge bg-warning text-dark">{{ order.status }}</span>
+                            {% elif order.status == 'Processing' %}
+                            <span class="badge bg-info">{{ order.status }}</span>
+                            {% elif order.status == 'Shipped' %}
+                            <span class="badge bg-primary">{{ order.status }}</span>
+                            {% elif order.status == 'Delivered' %}
+                            <span class="badge bg-success">{{ order.status }}</span>
+                            {% elif order.status == 'Completed' %}
+                            <span class="badge bg-success">{{ order.status }}</span>
+                            {% elif order.status == 'Cancelled' %}
+                            <span class="badge bg-danger">{{ order.status }}</span>
+                            {% elif order.status == 'Refunded' %}
+                            <span class="badge bg-secondary">{{ order.status }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ order.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.order_date_display|default:"—" }}</td>
+                        <td>{{ order.delivery_address|truncatewords:5|default:"-" }}</td>
+                        <td>
+                            <a href="{% url 'shop:order_detail' order.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editOrder({{ order.id }})" data-order-id="{{ order.id }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteOrder({{ order.id }})" data-order-id="{{ order.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Заказы не найдены</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно для редактирования заказа -->
+<div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="orderModalTitle">Редактировать заказ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="orderForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="orderId" name="order_id">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="orderStatus" class="form-label">Статус *</label>
+                            <select class="form-select" id="orderStatus" name="status" required>
+                                <option value="Pending">Ожидает оплаты</option>
+                                <option value="Processing">В обработке</option>
+                                <option value="Shipped">Отправлен</option>
+                                <option value="Delivered">Доставлен</option>
+                                <option value="Completed">Завершен</option>
+                                <option value="Cancelled">Отменен</option>
+                                <option value="Refunded">Возвращен</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="orderTotalAmount" class="form-label">Общая сумма *</label>
+                            <input type="number" class="form-control" id="orderTotalAmount" name="total_amount" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="orderDeliveryAddress" class="form-label">Адрес доставки</label>
+                        <textarea class="form-control" id="orderDeliveryAddress" name="delivery_address" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Примечание:</strong> Изменение статуса заказа может повлиять на возможность его оплаты или возврата.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveOrderBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+let currentOrderId = null;
+
+function editOrder(orderId) {
+    if (!orderId || isNaN(orderId)) {
+        alert('Ошибка: неверный ID заказа');
+        return;
+    }
+    
+    currentOrderId = orderId;
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/orders/${orderId}/`;
+    const modalElement = document.getElementById('orderModal');
+    const modal = new bootstrap.Modal(modalElement);
+    document.getElementById('orderModalTitle').textContent = 'Редактировать заказ #' + orderId;
+    document.getElementById('orderId').value = orderId;
+    
+    document.getElementById('orderForm').reset();
+    document.getElementById('orderId').value = orderId;
+    
+    modal.show();
+    const modalBody = modalElement.querySelector('.modal-body');
+    const originalContent = modalBody.innerHTML;
+    modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div><p class="mt-2">Загрузка данных заказа...</p></div>';
+    
+    fetch(url, {
+        method: 'GET',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        modalBody.innerHTML = originalContent;
+        
+        document.getElementById('orderStatus').value = data.status || 'Pending';
+        document.getElementById('orderTotalAmount').value = data.total_amount || '';
+        document.getElementById('orderDeliveryAddress').value = data.delivery_address || '';
+        
+        console.log('Order data loaded:', data);
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки заказа:', error);
+        modalBody.innerHTML = originalContent;
+        modal.hide();
+        alert('Ошибка загрузки данных заказа: ' + error.message);
+    });
+}
+
+function deleteOrder(orderId) {
+    if (!confirm('Вы уверены, что хотите удалить этот заказ? Это действие нельзя отменить.')) {
+        return;
+    }
+    
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/orders/${orderId}/`;
+    
+    fetch(url, {
+        method: 'DELETE',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.status === 204 ? {} : response.json();
+    })
+    .then(() => {
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Ошибка удаления заказа:', error);
+        alert('Ошибка удаления заказа: ' + error.message);
+    });
+}
+
+// Обработчик сохранения
+document.getElementById('saveOrderBtn')?.addEventListener('click', function() {
+    const form = document.getElementById('orderForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key === 'order_id') continue;
+        data[key] = value;
+    }
+    
+    const orderId = document.getElementById('orderId').value;
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const url = `${apiBaseUrl}/orders/${orderId}/`;
+    
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    fetch(url, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.id || data.status) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка сохранения заказа: ' + error.message);
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}
+

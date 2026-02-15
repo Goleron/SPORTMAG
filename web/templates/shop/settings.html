@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Настройки - Спортивный магазин{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-section {
+        background: var(--bg-white, #ffffff);
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: var(--text-primary, #212529);
+        border: 1px solid var(--border-color, #dee2e6);
+    }
+    .settings-section h3 {
+        margin-bottom: 1.5rem;
+        color: var(--text-primary, #333);
+        border-bottom: 2px solid var(--primary-color, #007bff);
+        padding-bottom: 0.5rem;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <h1 class="mb-4">
+            <i class="bi bi-gear"></i> Настройки
+        </h1>
+        
+        <!-- Редактирование профиля -->
+        <div class="settings-section mb-4">
+            <h3><i class="bi bi-person"></i> Мой профиль</h3>
+            <p class="text-muted small">Измените имя пользователя, email или пароль.</p>
+            <form method="post" id="profileForm">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="profile">
+                <div class="row">
+                    <div class="col-md-6 form-group mb-3">
+                        <label class="form-label" for="profile_username">Имя пользователя</label>
+                        <input type="text" class="form-control" name="profile_username" id="profile_username" required
+                               value="{{ user_data.username|default:'' }}" maxlength="100">
+                    </div>
+                    <div class="col-md-6 form-group mb-3">
+                        <label class="form-label" for="profile_email">Email</label>
+                        <input type="email" class="form-control" name="profile_email" id="profile_email" required
+                               value="{{ user_data.email|default:'' }}">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 form-group mb-3">
+                        <label class="form-label" for="profile_new_password">Новый пароль</label>
+                        <input type="password" class="form-control" name="profile_new_password" id="profile_new_password"
+                               placeholder="Оставьте пустым, если не меняете" minlength="8" autocomplete="new-password">
+                        <div class="form-text">Минимум 8 символов. Заполняйте только при смене пароля.</div>
+                    </div>
+                    <div class="col-md-6 form-group mb-3">
+                        <label class="form-label" for="profile_new_password2">Подтверждение пароля</label>
+                        <input type="password" class="form-control" name="profile_new_password2" id="profile_new_password2"
+                               placeholder="Повторите новый пароль" minlength="8" autocomplete="new-password">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg"></i> Сохранить профиль
+                </button>
+            </form>
+        </div>
+        
+        <form method="post" id="settingsForm">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="settings">
+            
+            <!-- Формат даты -->
+            <div class="settings-section">
+                <h3><i class="bi bi-calendar"></i> Формат даты</h3>
+                <div class="form-group">
+                    <label class="form-label" for="date_format">Формат отображения даты:</label>
+                    <select class="form-select" name="date_format" id="date_format">
+                        <option value="DD.MM.YYYY" {% if settings.date_format == 'DD.MM.YYYY' or not settings.date_format %}selected{% endif %}>
+                            DD.MM.YYYY (31.12.2024)
+                        </option>
+                        <option value="YYYY-MM-DD" {% if settings.date_format == 'YYYY-MM-DD' %}selected{% endif %}>
+                            YYYY-MM-DD (2024-12-31)
+                        </option>
+                        <option value="MM/DD/YYYY" {% if settings.date_format == 'MM/DD/YYYY' %}selected{% endif %}>
+                            MM/DD/YYYY (12/31/2024)
+                        </option>
+                        <option value="DD MMM YYYY" {% if settings.date_format == 'DD MMM YYYY' %}selected{% endif %}>
+                            DD MMM YYYY (31 дек 2024)
+                        </option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Формат чисел -->
+            <div class="settings-section">
+                <h3><i class="bi bi-123"></i> Формат чисел</h3>
+                <div class="form-group">
+                    <label class="form-label" for="number_format">Формат отображения чисел:</label>
+                    <select class="form-select" name="number_format" id="number_format">
+                        <option value="ru" {% if settings.number_format == 'ru' or not settings.number_format %}selected{% endif %}>
+                            Русский (1 234,56)
+                        </option>
+                        <option value="en" {% if settings.number_format == 'en' %}selected{% endif %}>
+                            Английский (1,234.56)
+                        </option>
+                        <option value="space" {% if settings.number_format == 'space' %}selected{% endif %}>
+                            С пробелами (1 234.56)
+                        </option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Размер страницы -->
+            <div class="settings-section">
+                <h3><i class="bi bi-list-ul"></i> Размер страницы</h3>
+                <div class="form-group">
+                    <label class="form-label" for="page_size">Количество элементов на странице:</label>
+                    <select class="form-select" name="page_size" id="page_size">
+                        <option value="10" {% if settings.page_size == 10 %}selected{% endif %}>10</option>
+                        <option value="20" {% if settings.page_size == 20 or not settings.page_size %}selected{% endif %}>20</option>
+                        <option value="50" {% if settings.page_size == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if settings.page_size == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Сохранённые фильтры -->
+            {% if settings.catalog_filters %}
+            <div class="settings-section">
+                <h3><i class="bi bi-funnel"></i> Сохранённые фильтры</h3>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    Ваши сохранённые фильтры будут автоматически применяться при следующем посещении каталога.
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Кнопки -->
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'shop:home' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Отмена
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Сохранить настройки
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}
+

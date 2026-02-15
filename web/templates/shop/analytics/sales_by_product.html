@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Продажи по продуктам - Аналитика{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Продажи по продуктам</h2>
+    <a href="{% url 'shop:analytics_dashboard' %}" class="btn btn-outline-secondary">Назад к дашборду</a>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="category" class="form-label">Категория</label>
+                <select name="category" id="category" class="form-select">
+                    <option value="">Все категории</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category == category.id %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">Дата от</label>
+                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">Дата до</label>
+                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">Применить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- График продаж -->
+{% if sales %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">График продаж по продуктам</h5>
+        <div class="btn-group">
+            <a href="{% url 'shop:analytics_export_sales_by_product_csv' %}?{% if selected_category %}category={{ selected_category }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}{% endif %}" 
+               class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+            </a>
+            <button onclick="exportChartToImage('salesChart', 'sales_by_product')" 
+                    class="btn btn-sm btn-outline-success">
+                <i class="bi bi-image"></i> PNG
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="salesChart" height="100"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- Таблица продаж -->
+<div class="card">
+    <div class="card-header">
+        <h5>Результаты</h5>
+    </div>
+    <div class="card-body">
+        {% if sales %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Количество продано</th>
+                        <th>Выручка</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td>{{ sale.product_name }}</td>
+                        <td><strong>{{ sale.total_quantity_sold }}</strong> шт.</td>
+                        <td><strong class="text-success">{{ sale.total_revenue }} ₽</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-active fw-bold">
+                        <th>Итого</th>
+                        <th>{{ sales|length }} товаров ({{ total_quantity }} шт.)</th>
+                        <th><strong class="text-success">{{ total_revenue }} ₽</strong></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Нет данных за выбранный период</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if sales %}
+const salesData = {{ sales_json|safe }};
+const salesLabels = salesData.map(s => s.product_name || s.product_sku || 'Товар #' + s.product_id);
+const salesRevenue = salesData.map(s => parseFloat(s.total_revenue || s.total_amount || 0));
+const salesQuantity = salesData.map(s => parseInt(s.total_quantity_sold || s.total_quantity || 0));
+
+const ctx = document.getElementById('salesChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: salesLabels,
+        datasets: [{
+            label: 'Выручка (₽)',
+            data: salesRevenue,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1,
+            yAxisID: 'y'
+        }, {
+            label: 'Количество продаж',
+            data: salesQuantity,
+            type: 'line',
+            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 2,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: 'Выручка (₽)'
+                }
+            },
+            y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: {
+                    display: true,
+                    text: 'Количество'
+                },
+                grid: {
+                    drawOnChartArea: false
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false
+            }
+        }
+    }
+});
+{% endif %}
+
+// Функция экспорта графика в изображение
+function exportChartToImage(canvasId, filename) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        alert('График не найден');
+        return;
+    }
+    
+    // Получаем Chart.js объект
+    const chart = Chart.getChart(canvasId);
+    if (!chart) {
+        alert('График не инициализирован');
+        return;
+    }
+    
+    // Экспортируем в PNG
+    const url = chart.toBase64Image('image/png', 1.0);
+    
+    // Создаем ссылку для скачивания
+    const link = document.createElement('a');
+    link.download = filename + '_' + new Date().toISOString().split('T')[0] + '.png';
+    link.href = url;
+    link.click();
+}
+</script>
+{% endblock %}

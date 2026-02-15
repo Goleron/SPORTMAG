@@ -1,0 +1,496 @@
+{% extends 'base.html' %}
+
+{% block title %}Управление товарами - Админ-панель{% endblock %}
+
+{% block extra_head %}
+{% if request.session.access_token %}
+<meta name="access-token" content="{{ request.session.access_token }}">
+{% endif %}
+<meta name="api-base-url" content="{{ api_base_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление товарами</h2>
+    <div class="btn-group">
+        <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">Назад</a>
+        <a href="{% url 'shop:admin_export_products_csv' %}" class="btn btn-outline-success">
+            <i class="bi bi-download"></i> Экспорт CSV
+        </a>
+        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="bi bi-upload"></i> Импорт CSV
+        </button>
+        <button class="btn btn-primary" id="addProductModal" data-bs-toggle="modal" data-bs-target="#productModal">
+            <i class="bi bi-plus-circle"></i> Добавить товар
+        </button>
+    </div>
+</div>
+
+<!-- Модальное окно импорта -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Импорт товаров из CSV</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="import_csv" value="1">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="csv_file" class="form-label">Выберите CSV файл</label>
+                        <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                        <div class="form-text">
+                            Формат CSV: SKU, Название, Описание, Категория, Цена, Количество на складе, Доступен
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Примечание:</strong> Если товар с указанным SKU уже существует, он будет обновлен. 
+                        Новые товары будут созданы.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Импортировать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Категория</th>
+                        <th>Цена</th>
+                        <th>Остаток</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>{{ product.id }}</td>
+                        <td>{{ product.name }}</td>
+                        <td>{{ product.category_name|default:"-" }}</td>
+                        <td>{{ product.price }} ₽</td>
+                        <td>{{ product.stock_quantity }}</td>
+                        <td>
+                            {% if product.is_available %}
+                            <span class="badge bg-success">Доступен</span>
+                            {% else %}
+                            <span class="badge bg-danger">Недоступен</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'shop:product_detail' product.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editProduct({{ product.id }})" data-product-id="{{ product.id }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Товары не найдены</p>
+        {% endif %}
+        
+        <!-- Пагинация -->
+        {% if products_pagination.next or products_pagination.previous %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if products_pagination.previous %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ products_pagination.previous }}">Предыдущая</a>
+                </li>
+                {% endif %}
+                
+                {% if products_pagination.next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ products_pagination.next }}">Следующая</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        
+        {% if products_count %}
+        <div class="text-center text-muted mt-2">
+            <small>Всего товаров: {{ products_count }}</small>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно для добавления/редактирования товара -->
+<div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productModalTitle">Добавить товар</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="productForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="productId" name="product_id">
+                    
+                    <div class="mb-3">
+                        <label for="productName" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="productName" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="productDescription" class="form-label">Описание</label>
+                        <textarea class="form-control" id="productDescription" name="description" rows="4"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="productCategory" class="form-label">Категория *</label>
+                            <select class="form-select" id="productCategory" name="category_id" required>
+                                <option value="">Выберите категорию</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="productSku" class="form-label">Артикул (SKU)</label>
+                            <input type="text" class="form-control" id="productSku" name="sku">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="productPrice" class="form-label">Цена *</label>
+                            <input type="number" class="form-control" id="productPrice" name="price" step="0.01" min="0" required>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="productStock" class="form-label">Остаток на складе *</label>
+                            <input type="number" class="form-control" id="productStock" name="stock_quantity" min="0" required>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="productAvailable" class="form-label">Доступен</label>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="productAvailable" name="is_available" checked>
+                                <label class="form-check-label" for="productAvailable">Товар доступен</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="productImageUrl" class="form-label">URL изображения</label>
+                        <input type="url" class="form-control" id="productImageUrl" name="image_url">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveProductBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+let currentProductId = null;
+
+function editProduct(productId) {
+    console.log('editProduct called with productId:', productId, 'type:', typeof productId);
+    
+    // Если productId не передан, пытаемся получить из data-атрибута
+    if (!productId || productId === 'undefined' || productId === 'null') {
+        // Пытаемся получить из event
+        const event = window.event;
+        if (event && event.target) {
+            const btn = event.target.closest('button');
+            if (btn) {
+                const dataId = btn.getAttribute('data-product-id');
+                if (dataId) {
+                    productId = parseInt(dataId);
+                    console.log('Got productId from data-attribute:', productId);
+                }
+            }
+        }
+    }
+    
+    // Проверяем, что productId валидный
+    if (!productId || productId === 'undefined' || productId === 'null' || isNaN(productId)) {
+        alert('Ошибка: неверный ID товара: ' + productId);
+        return;
+    }
+    
+    // Преобразуем в число, если это строка
+    productId = parseInt(productId);
+    
+    currentProductId = productId;
+    
+    // Получаем базовый URL API из мета-тега
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    
+    // Загружаем данные товара
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
+    
+    // Получаем токен из мета-тега или cookie
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/products/${productId}/`;
+    console.log('Fetching product from URL:', url);
+    
+    // Показываем индикатор загрузки
+    const modalElement = document.getElementById('productModal');
+    const modal = new bootstrap.Modal(modalElement);
+    document.getElementById('productModalTitle').textContent = 'Редактировать товар';
+    document.getElementById('productId').value = productId;
+    
+    // Очищаем форму перед загрузкой
+    document.getElementById('productForm').reset();
+    document.getElementById('productId').value = productId;
+    
+    // Открываем модальное окно с индикатором загрузки
+    modal.show();
+    const modalBody = modalElement.querySelector('.modal-body');
+    const originalContent = modalBody.innerHTML;
+    modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"><span class="visually-hidden">Загрузка...</span></div><p class="mt-2">Загрузка данных товара...</p></div>';
+    
+    fetch(url, {
+        method: 'GET',
+        headers: headers,
+        mode: 'cors', // Явно указываем режим CORS
+        credentials: 'include' // Включаем отправку cookies
+    })
+    .then(async response => {
+        const contentType = response.headers.get('content-type');
+        
+        if (!response.ok) {
+            // Проверяем, является ли ответ JSON
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            } else {
+                // Если это HTML (например, страница 404), получаем текст
+                const text = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${response.statusText}. Возможно, товар не найден или требуется авторизация.`);
+            }
+        }
+        
+        // Проверяем, что ответ действительно JSON
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error('Сервер вернул не JSON ответ. Возможно, требуется авторизация.');
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        // Восстанавливаем содержимое модального окна
+        modalBody.innerHTML = originalContent;
+        
+        // Заполняем форму данными
+        document.getElementById('productName').value = data.name || '';
+        document.getElementById('productDescription').value = data.description || '';
+        
+        // Обрабатываем категорию (может быть объект или ID)
+        let categoryId = '';
+        if (data.category) {
+            if (typeof data.category === 'object' && data.category.id) {
+                categoryId = data.category.id;
+            } else if (typeof data.category === 'number') {
+                categoryId = data.category;
+            }
+        } else if (data.category_id) {
+            categoryId = data.category_id;
+        }
+        const categorySelect = document.getElementById('productCategory');
+        if (categorySelect) {
+            categorySelect.value = categoryId;
+        }
+        
+        document.getElementById('productSku').value = data.sku || '';
+        document.getElementById('productPrice').value = data.price || '';
+        document.getElementById('productStock').value = data.stock_quantity || '';
+        document.getElementById('productAvailable').checked = data.is_available !== false;
+        document.getElementById('productImageUrl').value = data.image_url || '';
+        
+        console.log('Product data loaded successfully:', data);
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки товара:', error);
+        console.error('Product ID:', productId, 'Type:', typeof productId);
+        console.error('URL:', url);
+        console.error('Headers:', headers);
+        console.error('Full error:', error);
+        
+        // Восстанавливаем содержимое модального окна
+        modalBody.innerHTML = originalContent;
+        
+        // Закрываем модальное окно
+        modal.hide();
+        
+        // Показываем более детальную ошибку
+        let errorMsg = 'Ошибка загрузки данных товара: ' + error.message;
+        
+        // Детальная диагностика
+        if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+            errorMsg = 'Не удалось подключиться к API серверу.\n\n';
+            errorMsg += 'Возможные причины:\n';
+            errorMsg += '1. API сервер не запущен (проверьте порт 8000)\n';
+            errorMsg += '2. Проблема с CORS (проверьте настройки в config/settings.py)\n';
+            errorMsg += '3. Неправильный URL: ' + url + '\n';
+            errorMsg += '4. Блокировка браузером (проверьте консоль F12)';
+        } else if (error.message.includes('404')) {
+            errorMsg += '\n\nПроверьте:\n1. Товар существует в базе данных\n2. Вы авторизованы\n3. API сервер запущен на порту 8000';
+        } else if (error.message.includes('401') || error.message.includes('403')) {
+            errorMsg += '\n\nПроверьте:\n1. Вы авторизованы\n2. У вас есть права администратора\n3. Токен доступа действителен';
+        } else if (error.message.includes('NetworkError') || error.message.includes('network')) {
+            errorMsg = 'Ошибка сети. Проверьте:\n1. API сервер запущен\n2. Нет проблем с сетью\n3. URL правильный: ' + url;
+        }
+        
+        alert(errorMsg);
+    });
+}
+
+// Обработчик кнопки "Добавить товар"
+document.getElementById('addProductModal')?.addEventListener('click', function() {
+    currentProductId = null;
+    document.getElementById('productModalTitle').textContent = 'Добавить товар';
+    document.getElementById('productForm').reset();
+    document.getElementById('productId').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('productModal'));
+    modal.show();
+});
+
+// Обработчик сохранения
+document.getElementById('saveProductBtn')?.addEventListener('click', function() {
+    const form = document.getElementById('productForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    // Обрабатываем все поля формы
+    for (let [key, value] of formData.entries()) {
+        if (key === 'product_id') {
+            continue; // Пропускаем
+        } else if (key === 'is_available') {
+            // is_available обрабатывается отдельно ниже
+            continue;
+        } else {
+            data[key] = value;
+        }
+    }
+    
+    // Явно обрабатываем category_id - API ожидает именно это поле
+    const categorySelect = document.getElementById('productCategory');
+    if (categorySelect && categorySelect.value) {
+        data['category_id'] = parseInt(categorySelect.value);
+    }
+    // Удаляем старое поле category, если оно есть
+    if ('category' in data && 'category_id' in data) {
+        delete data['category'];
+    }
+    
+    // Явно добавляем is_available, даже если чекбокс не отмечен
+    const isAvailableCheckbox = document.getElementById('productAvailable');
+    data['is_available'] = isAvailableCheckbox ? isAvailableCheckbox.checked : true;
+    
+    const productId = document.getElementById('productId').value;
+    // Получаем базовый URL API из мета-тега
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const url = productId ? `${apiBaseUrl}/products/${productId}/` : `${apiBaseUrl}/products/`;
+    const method = productId ? 'PUT' : 'POST';
+    
+    const saveHeaders = {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+    };
+    
+    const saveAccessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (saveAccessToken) {
+        saveHeaders['Authorization'] = 'Bearer ' + saveAccessToken;
+    }
+    
+    fetch(url, {
+        method: method,
+        headers: saveHeaders,
+        body: JSON.stringify(data),
+        mode: 'cors', // Явно указываем режим CORS
+        credentials: 'include' // Включаем отправку cookies
+    })
+    .then(async response => {
+        const contentType = response.headers.get('content-type');
+        
+        if (!response.ok) {
+            // Проверяем, является ли ответ JSON
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.error || err.detail || `HTTP error! status: ${response.status}`);
+            } else {
+                // Если это HTML, получаем текст
+                const text = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${response.statusText}. Возможно, требуется авторизация или недостаточно прав.`);
+            }
+        }
+        
+        // Проверяем, что ответ действительно JSON
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error('Сервер вернул не JSON ответ.');
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        if (data.id || data.name) {
+            location.reload(); // Перезагружаем страницу
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка сохранения товара');
+    });
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}
+{% endblock %}
+
+

@@ -1,0 +1,3 @@
+"""
+Пакет management-команд Django.
+"""

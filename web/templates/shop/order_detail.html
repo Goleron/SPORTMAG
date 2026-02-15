@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Заказ #{{ order.id }} - Спортивный магазин{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Заказ #{{ order.id }}</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Информация о заказе</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-4"><strong>Дата заказа:</strong></div>
+                    <div class="col-sm-8">{{ order.created_at|date:"d.m.Y H:i" }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4"><strong>Статус:</strong></div>
+                    <div class="col-sm-8">
+                        {% if order.status == 'Pending' %}
+                        <span class="badge bg-warning">Ожидает оплаты</span>
+                        {% elif order.status == 'Processing' %}
+                        <span class="badge bg-info">В обработке</span>
+                        {% elif order.status == 'Shipped' %}
+                        <span class="badge bg-primary">Отправлен</span>
+                        {% elif order.status == 'Delivered' %}
+                        <span class="badge bg-success">Доставлен</span>
+                        {% elif order.status == 'Completed' %}
+                        <span class="badge bg-success">Завершен</span>
+                        {% elif order.status == 'Refunded' %}
+                        <span class="badge bg-info">Возвращен</span>
+                        {% elif order.status == 'Cancelled' %}
+                        <span class="badge bg-danger">Отменен</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ order.status }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if order.delivery_address %}
+                <div class="row mb-3">
+                    <div class="col-sm-4"><strong>Адрес доставки:</strong></div>
+                    <div class="col-sm-8">{{ order.delivery_address }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Товары в заказе</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th>Количество</th>
+                                <th>Цена</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in order.items %}
+                            <tr>
+                                <td>
+                                    <strong>{{ item.product.name }}</strong>
+                                    {% if item.product.sku %}
+                                    <br><small class="text-muted">Артикул: {{ item.product.sku }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.quantity }}</td>
+                                <td>{{ item.price_at_purchase }} ₽</td>
+                                <td><strong>{{ item.total_price }} ₽</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="3" class="text-end">Итого:</th>
+                                <th class="text-primary">{{ order.total_amount }} ₽</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        {% if transactions %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>История транзакций</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Дата</th>
+                                <th>Сумма</th>
+                                <th>Способ оплаты</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td>#{{ transaction.id }}</td>
+                                <td>{{ transaction.transaction_date_formatted|default:transaction.transaction_date }}</td>
+                                <td><strong>{{ transaction.amount }} ₽</strong></td>
+                                <td>
+                                    {% if transaction.payment_method == 'Card' %}
+                                        <i class="bi bi-credit-card"></i> Карта
+                                    {% elif transaction.payment_method == 'Cash' %}
+                                        <i class="bi bi-cash"></i> Наличные
+                                    {% elif transaction.payment_method == 'Online' %}
+                                        <i class="bi bi-globe"></i> Онлайн
+                                    {% elif transaction.payment_method == 'Bank Transfer' %}
+                                        <i class="bi bi-bank"></i> Банковский перевод
+                                    {% else %}
+                                        {{ transaction.payment_method }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if transaction.status == 'Success' %}
+                                        <span class="badge bg-success">Успешно</span>
+                                    {% elif transaction.status == 'Failed' %}
+                                        <span class="badge bg-danger">Неудачно</span>
+                                    {% elif transaction.status == 'Refunded' %}
+                                        <span class="badge bg-info">Возвращено</span>
+                                    {% elif transaction.status == 'Pending' %}
+                                        <span class="badge bg-warning">Ожидает</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ transaction.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Действия</h5>
+            </div>
+            <div class="card-body">
+                {% if order.can_be_paid or order.status == 'Pending' or order.status == 'Cancelled' %}
+                <a href="{% url 'shop:payment' order.id %}" class="btn btn-success w-100 mb-2">
+                    <i class="bi bi-credit-card"></i> Оплатить заказ
+                </a>
+                {% endif %}
+                <a href="{% url 'shop:orders' %}" class="btn btn-outline-secondary w-100 mb-2">
+                    <i class="bi bi-arrow-left"></i> Вернуться к заказам
+                </a>
+                <a href="{% url 'shop:product_list' %}" class="btn btn-primary w-100">
+                    <i class="bi bi-bag"></i> Продолжить покупки
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

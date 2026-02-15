@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ product.name }} - Спортивный магазин{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/product-actions.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row animate-on-scroll">
+    <div class="col-md-6">
+        {% if product.image_url %}
+        <div class="rounded shadow overflow-hidden">
+            <img src="{{ product.image_url }}" class="img-fluid product-detail-image" alt="{{ product.name }}" style="width: 100%; height: auto;">
+        </div>
+        {% else %}
+        <div class="bg-light d-flex align-items-center justify-content-center rounded shadow" style="height: 500px; background: var(--gradient-card);">
+            <i class="bi bi-image text-muted" style="font-size: 5rem;"></i>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-6">
+        <h1 class="gradient-text">{{ product.name }}</h1>
+        
+        {% if product.category %}
+        <p class="text-muted">
+            <i class="bi bi-tag me-2"></i>
+            {% if product.category.slug %}
+            <a href="{% url 'shop:product_list_by_category' product.category.slug %}" class="text-decoration-none" style="transition: var(--transition);">
+                {{ product.category.name }}
+            </a>
+            {% else %}
+            {{ product.category.name }}
+            {% endif %}
+        </p>
+        {% endif %}
+        
+        <div class="mb-3">
+            <span class="h3 text-primary" style="font-weight: 700;">{{ product.price }} ₽</span>
+            {% if not product.is_available %}
+            <span class="badge bg-secondary ms-2">Товар недоступен (в архиве)</span>
+            {% elif user_data.role_name == 'Admin' %}
+                {% if product.stock_quantity > 0 %}
+                <span class="badge bg-success ms-2">В наличии ({{ product.stock_quantity }} шт.)</span>
+                {% else %}
+                <span class="badge bg-danger ms-2">Нет в наличии</span>
+                {% endif %}
+            {% else %}
+                {% if product.stock_quantity > 0 %}
+                <span class="badge bg-success ms-2">В наличии</span>
+                {% else %}
+                <span class="badge bg-danger ms-2">Нет в наличии</span>
+                {% endif %}
+            {% endif %}
+        </div>
+        
+        {% if not product.is_available %}
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>Товар недоступен!</strong> Этот товар находится в архиве и временно недоступен для заказа.
+        </div>
+        {% endif %}
+        
+        {% if user_data.role_name == 'Admin' and product.sku %}
+        <p class="text-muted small">Артикул: {{ product.sku }}</p>
+        {% endif %}
+        
+        <div class="mb-4">
+            <h5>Описание</h5>
+            <p>{{ product.description|linebreaks }}</p>
+        </div>
+        
+        {% if attributes %}
+        <div class="mb-4">
+            <h5>Характеристики</h5>
+            <table class="table table-sm">
+                {% for attr in attributes %}
+                <tr>
+                    <td><strong>{{ attr.attribute.name|default:attr.attribute }}:</strong></td>
+                    <td>{{ attr.value }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+        
+        {% if request.session.access_token %}
+        {% if product.is_available and product.stock_quantity > 0 %}
+        <div class="product-actions" data-product-id="{{ product.id }}" data-max-quantity="{{ product.stock_quantity }}">
+            <div class="quantity-control d-none mb-3">
+                <label class="form-label">Количество:</label>
+                <div class="input-group" style="max-width: 200px;">
+                    <button class="btn btn-outline-secondary quantity-decrease" type="button">-</button>
+                    <input type="number" class="form-control text-center quantity-input" value="1" min="1" max="{{ product.stock_quantity }}">
+                    <button class="btn btn-outline-secondary quantity-increase" type="button">+</button>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary btn-lg w-100 mb-2 add-to-cart-btn magnetic-btn" data-product-id="{{ product.id }}">
+                    <i class="bi bi-cart-plus"></i> В корзину
+                </button>
+                <a href="{% url 'shop:checkout' %}?product={{ product.id }}&quantity=1" class="btn btn-success btn-lg w-100 buy-now-btn magnetic-btn" data-product-id="{{ product.id }}">
+                    <i class="bi bi-bag-check"></i> Купить сейчас
+                </a>
+            </div>
+        </div>
+        {% elif not product.is_available %}
+        <button class="btn btn-secondary btn-lg w-100" disabled>
+            <i class="bi bi-archive"></i> Товар недоступен (в архиве)
+        </button>
+        {% else %}
+        <button class="btn btn-secondary btn-lg w-100" disabled>
+            <i class="bi bi-x-circle"></i> Товар недоступен (нет в наличии)
+        </button>
+        {% endif %}
+        {% else %}
+        <div class="alert alert-info">
+            <a href="{% url 'shop:login' %}" class="alert-link">Войдите</a>, чтобы добавить товар в корзину
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Похожие товары -->
+{% if related_products %}
+<div class="mt-5 animate-on-scroll">
+    <h3 class="mb-4 gradient-text">Похожие товары</h3>
+    <div class="row g-4">
+        {% for related_product in related_products %}
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm product-card animate-on-scroll" style="animation-delay: {{ forloop.counter0|add:'0.1' }}s;">
+                {% if related_product.image_url %}
+                <div class="overflow-hidden">
+                    <img src="{{ related_product.image_url }}" class="card-img-top" alt="{{ related_product.name }}" style="height: 200px; object-fit: cover;">
+                </div>
+                {% else %}
+                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px; background: var(--gradient-card);">
+                    <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                </div>
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <h6 class="card-title">{{ related_product.name }}</h6>
+                    <div class="mt-auto">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="h6 text-primary mb-0">{{ related_product.price }} ₽</span>
+                        </div>
+                        <a href="{% url 'shop:product_detail' related_product.id %}" class="btn btn-sm btn-outline-primary w-100 magnetic-btn">
+                            <i class="bi bi-eye me-2"></i>Подробнее
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Управление транзакциями - Админ-панель{% endblock %}
+
+{% block extra_head %}
+{% if request.session.access_token %}
+<meta name="access-token" content="{{ request.session.access_token }}">
+{% endif %}
+<meta name="api-base-url" content="{{ api_base_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление транзакциями</h2>
+    <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">Назад</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if transactions %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Заказ</th>
+                        <th>Сумма</th>
+                        <th>Способ оплаты</th>
+                        <th>Статус</th>
+                        <th>Дата транзакции</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.id }}</td>
+                        <td>
+                            {% if transaction.order_id %}
+                                <a href="{% url 'shop:order_detail' transaction.order_id %}">
+                                    Заказ #{{ transaction.order_id }}
+                                </a>
+                            {% elif transaction.order %}
+                                {% if transaction.order.id %}
+                                    <a href="{% url 'shop:order_detail' transaction.order.id %}">
+                                        Заказ #{{ transaction.order.id }}
+                                    </a>
+                                {% else %}
+                                    <a href="{% url 'shop:order_detail' transaction.order %}">
+                                        Заказ #{{ transaction.order }}
+                                    </a>
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ transaction.amount }} ₽</strong></td>
+                        <td>{{ transaction.payment_method }}</td>
+                        <td>
+                            {% if transaction.status == 'Success' %}
+                            <span class="badge bg-success">{{ transaction.status }}</span>
+                            {% elif transaction.status == 'Failed' %}
+                            <span class="badge bg-danger">{{ transaction.status }}</span>
+                            {% elif transaction.status == 'Refunded' %}
+                            <span class="badge bg-secondary">{{ transaction.status }}</span>
+                            {% elif transaction.status == 'Pending' %}
+                            <span class="badge bg-warning text-dark">{{ transaction.status }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ transaction.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ transaction.transaction_date_formatted|default:"-" }}</td>
+                        <td>
+                            {% if transaction.status == 'Success' and transaction.can_be_refunded %}
+                            <button class="btn btn-sm btn-outline-warning" onclick="refundTransaction({{ transaction.id }})" data-transaction-id="{{ transaction.id }}">
+                                <i class="bi bi-arrow-counterclockwise"></i> Возврат
+                            </button>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Транзакции не найдены</p>
+        {% endif %}
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function refundTransaction(transactionId) {
+    if (!confirm('Вы уверены, что хотите вернуть эту транзакцию? Это действие нельзя отменить.')) {
+        return;
+    }
+    
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/orders/transactions/${transactionId}/refund/`;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        alert('Транзакция успешно возвращена');
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Ошибка возврата транзакции:', error);
+        alert('Ошибка возврата транзакции: ' + error.message);
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}
+

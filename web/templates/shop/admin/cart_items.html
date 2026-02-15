@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+
+{% block title %}Управление корзиной - Админ-панель{% endblock %}
+
+{% block extra_head %}
+{% if request.session.access_token %}
+<meta name="access-token" content="{{ request.session.access_token }}">
+{% endif %}
+<meta name="api-base-url" content="{{ api_base_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление корзиной</h2>
+    <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">Назад</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-8">
+                <label for="user_id" class="form-label">Выберите пользователя</label>
+                <select class="form-select" name="user_id" id="user_id" onchange="this.form.submit()">
+                    <option value="">-- Выберите пользователя --</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if selected_user_id == user.id|stringformat:"s" %}selected{% endif %}>
+                        {{ user.username }} ({{ user.email }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">&nbsp;</label>
+                <div>
+                    <button type="submit" class="btn btn-primary">Показать корзину</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_user %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>Корзина пользователя:</strong> {{ selected_user }}
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Выберите пользователя</strong> для просмотра его корзины.
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        {% if cart_items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Пользователь</th>
+                        <th>Товар</th>
+                        <th>Количество</th>
+                        <th>Цена</th>
+                        <th>Сумма</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cart_items %}
+                    <tr data-item-id="{{ item.id }}">
+                        <td>{{ item.id }}</td>
+                        <td>
+                            {% if item.user %}
+                                {% if item.user.username %}
+                                    {{ item.user.username }}
+                                {% else %}
+                                    ID: {{ item.user.id|default:item.user_id }}
+                                {% endif %}
+                            {% else %}
+                                ID: {{ item.user_id }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.product %}
+                                {% if item.product.name %}
+                                    {{ item.product.name }}
+                                {% else %}
+                                    ID: {{ item.product.id|default:item.product_id }}
+                                {% endif %}
+                            {% else %}
+                                ID: {{ item.product_id }}
+                            {% endif %}
+                        </td>
+                        <td>{{ item.quantity }}</td>
+                        <td>
+                            {% if item.product %}
+                                {{ item.product.price|default:"-" }} ₽
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>
+                                {% if item.total_price %}
+                                    {{ item.total_price }} ₽
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </strong>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editCartItem({{ item.id }})" data-item-id="{{ item.id }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteCartItem({{ item.id }})" data-item-id="{{ item.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Элементы корзины не найдены</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно для редактирования элемента корзины -->
+<div class="modal fade" id="cartItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cartItemModalTitle">Редактировать элемент корзины</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="cartItemForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="cartItemId" name="item_id">
+                    
+                    <div class="mb-3">
+                        <label for="cartItemQuantity" class="form-label">Количество *</label>
+                        <input type="number" class="form-control" id="cartItemQuantity" name="quantity" min="1" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveCartItemBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function editCartItem(itemId) {
+    if (!itemId || isNaN(itemId)) {
+        alert('Ошибка: неверный ID элемента');
+        return;
+    }
+    
+    const userId = document.getElementById('user_id')?.value;
+    if (!userId) {
+        alert('Ошибка: не выбран пользователь');
+        return;
+    }
+    
+    const modalElement = document.getElementById('cartItemModal');
+    const modal = new bootstrap.Modal(modalElement);
+    document.getElementById('cartItemModalTitle').textContent = 'Редактировать элемент корзины';
+    document.getElementById('cartItemId').value = itemId;
+    
+    // Используем данные из таблицы вместо запроса к API
+    const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+    if (row) {
+        const quantityCell = row.querySelector('td:nth-child(4)');
+        if (quantityCell) {
+            document.getElementById('cartItemQuantity').value = quantityCell.textContent.trim();
+        } else {
+            document.getElementById('cartItemQuantity').value = 1;
+        }
+    } else {
+        document.getElementById('cartItemQuantity').value = 1;
+    }
+    
+    modal.show();
+}
+
+function deleteCartItem(itemId) {
+    if (!confirm('Вы уверены, что хотите удалить этот элемент из корзины?')) {
+        return;
+    }
+    
+    const userId = document.getElementById('user_id')?.value;
+    if (!userId) {
+        alert('Ошибка: не выбран пользователь');
+        return;
+    }
+    
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/cart/admin/users/${userId}/items/${itemId}/delete/`;
+    
+    fetch(url, {
+        method: 'DELETE',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.status === 204 ? {} : response.json();
+    })
+    .then(() => {
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Ошибка удаления элемента корзины:', error);
+        alert('Ошибка удаления: ' + error.message);
+    });
+}
+
+// Обработчик сохранения
+document.getElementById('saveCartItemBtn')?.addEventListener('click', function() {
+    const userId = document.getElementById('user_id')?.value;
+    if (!userId) {
+        alert('Ошибка: не выбран пользователь');
+        return;
+    }
+    
+    const form = document.getElementById('cartItemForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key === 'item_id') continue;
+        data[key] = value;
+    }
+    
+    const itemId = document.getElementById('cartItemId').value;
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const url = `${apiBaseUrl}/cart/admin/users/${userId}/items/${itemId}/`;
+    
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    fetch(url, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.id || data.quantity) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка сохранения: ' + error.message);
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}
+

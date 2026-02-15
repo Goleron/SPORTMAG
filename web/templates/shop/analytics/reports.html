@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Отчеты - Аналитика{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-3">
+                <i class="bi bi-file-earmark-text"></i> Отчеты
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'shop:home' %}">Главная</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'shop:analytics_dashboard' %}">Аналитика</a></li>
+                    <li class="breadcrumb-item active">Отчеты</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Общая статистика -->
+    {% if stats %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Общая выручка</h5>
+                    <h2 class="text-primary">{{ stats.total_revenue|default:0|floatformat:0 }} ₽</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Всего заказов</h5>
+                    <h2 class="text-info">{{ stats.total_orders|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Всего пользователей</h5>
+                    <h2 class="text-success">{{ stats.active_users|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Средний чек</h5>
+                    <h2 class="text-warning">{{ stats.avg_check|default:0|floatformat:0 }} ₽</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Топ товаров -->
+    {% if top_products %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-trophy"></i> Топ-10 товаров по продажам
+                    </h5>
+                    <a href="{% url 'shop:analytics_export_top_products_csv' %}?limit=10" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-download"></i> Экспорт CSV
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Товар</th>
+                                    <th>Количество продаж</th>
+                                    <th>Выручка</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in top_products %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <strong>{{ product.product_name|default:product.name }}</strong>
+                                        {% if product.sku %}
+                                        <br><small class="text-muted">Артикул: {{ product.sku }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ product.qty_sold|default:product.total_quantity|default:product.quantity|default:0 }} шт.</td>
+                                    <td class="text-success">{{ product.total_revenue|default:product.revenue|default:0 }} ₽</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Быстрые ссылки на другие отчеты -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-link-45deg"></i> Дополнительные отчеты
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-graph-up-arrow"></i> Продажи по продуктам
+                                    </h6>
+                                    <p class="card-text text-muted small">Детальная статистика продаж по каждому товару с возможностью фильтрации</p>
+                                    <a href="{% url 'shop:analytics_sales_by_product' %}" class="btn btn-sm btn-outline-primary">Открыть</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-calendar-month"></i> Ежемесячные продажи
+                                    </h6>
+                                    <p class="card-text text-muted small">Статистика продаж по месяцам для анализа сезонности</p>
+                                    <a href="{% url 'shop:analytics_monthly_sales' %}" class="btn btn-sm btn-outline-primary">Открыть</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-cash-stack"></i> Выручка за период
+                                    </h6>
+                                    <p class="card-text text-muted small">Анализ выручки за выбранный период времени</p>
+                                    <a href="{% url 'shop:analytics_revenue' %}" class="btn btn-sm btn-outline-primary">Открыть</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Информационное сообщение -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5 class="alert-heading">
+                    <i class="bi bi-info-circle"></i> Информация
+                </h5>
+                <p class="mb-0">
+                    Это окно с отчетами находится в разработке. Здесь будут доступны дополнительные аналитические отчеты и инструменты для анализа данных.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}Ежемесячные продажи - Аналитика{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Ежемесячные продажи</h2>
+    <a href="{% url 'shop:analytics_dashboard' %}" class="btn btn-outline-secondary">Назад к дашборду</a>
+</div>
+
+<!-- Фильтр по году -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="year" class="form-label">Год</label>
+                <input type="number" name="year" id="year" class="form-control" value="{{ year }}" min="2020" max="2030">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">Применить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- График ежемесячных продаж -->
+{% if sales %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">График продаж по месяцам за {{ year }} год</h5>
+        <div class="btn-group">
+            <a href="{% url 'shop:analytics_export_monthly_sales_csv' %}?year={{ year }}" 
+               class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+            </a>
+            <button onclick="exportChartToImage('monthlySalesChart', 'monthly_sales')" 
+                    class="btn btn-sm btn-outline-success">
+                <i class="bi bi-image"></i> PNG
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="monthlySalesChart" height="100"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- Таблица продаж -->
+<div class="card">
+    <div class="card-header">
+        <h5>Продажи по месяцам за {{ year }} год</h5>
+    </div>
+    <div class="card-body">
+        {% if sales %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Месяц</th>
+                        <th>Выручка</th>
+                        <th>Количество заказов</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td>{{ sale.month_start|date:"F Y" }}</td>
+                        <td><strong class="text-success">{{ sale.total_revenue }} ₽</strong></td>
+                        <td>{{ sale.orders_count }} заказов</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Нет данных за выбранный год</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if sales %}
+const monthlySalesData = {{ sales_json|safe }};
+const monthLabels = monthlySalesData.map(s => {
+    const date = new Date(s.month_start || s.month);
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                       'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    return monthNames[date.getMonth()] + ' ' + date.getFullYear();
+});
+const revenueData = monthlySalesData.map(s => parseFloat(s.total_revenue || 0));
+const ordersData = monthlySalesData.map(s => parseInt(s.orders_count || 0));
+
+const ctx = document.getElementById('monthlySalesChart').getContext('2d');
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: monthLabels,
+        datasets: [{
+            label: 'Выручка (₽)',
+            data: revenueData,
+            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4
+        }, {
+            label: 'Количество заказов',
+            data: ordersData,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Выручка (₽)'
+                }
+            },
+            y1: {
+                beginAtZero: true,
+                position: 'right',
+                title: {
+                    display: true,
+                    text: 'Количество заказов'
+                },
+                grid: {
+                    drawOnChartArea: false
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        }
+    }
+});
+{% endif %}
+
+// Функция экспорта графика в изображение
+function exportChartToImage(canvasId, filename) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        alert('График не найден');
+        return;
+    }
+    
+    const chart = Chart.getChart(canvasId);
+    if (!chart) {
+        alert('График не инициализирован');
+        return;
+    }
+    
+    const url = chart.toBase64Image('image/png', 1.0);
+    const link = document.createElement('a');
+    link.download = filename + '_' + new Date().toISOString().split('T')[0] + '.png';
+    link.href = url;
+    link.click();
+}
+</script>
+{% endblock %}
+

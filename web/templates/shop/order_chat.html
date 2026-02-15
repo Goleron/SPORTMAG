@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Чат по заказу #{{ order.id }} - Спортивный магазин{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-messages {
+        height: 500px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+    .message {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+    }
+    .message.own {
+        background-color: #007bff;
+        color: white;
+        margin-left: 20%;
+    }
+    .message.other {
+        background-color: white;
+        border: 1px solid #dee2e6;
+        margin-right: 20%;
+    }
+    .message-header {
+        font-size: 0.875rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }
+    .message.own .message-header {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    .message.other .message-header {
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>Чат по заказу #{{ order.id }}</h2>
+            <a href="{% url 'shop:order_detail' order.id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Назад к заказу
+            </a>
+        </div>
+        <p class="text-muted">
+            Статус заказа: <span class="badge bg-info">{{ order.status }}</span>
+        </p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Сообщения</h5>
+            </div>
+            <div class="card-body">
+                <div id="chatMessages" class="chat-messages">
+                    <div class="text-center text-muted">
+                        <p>Загрузка сообщений...</p>
+                    </div>
+                </div>
+                
+                <form id="chatForm" class="mt-3">
+                    {% csrf_token %}
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="messageInput" 
+                               placeholder="Введите сообщение..." required>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Отправить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+const orderId = {{ order_id }};
+const chatId = null; // Будет получен после создания чата
+let currentUser = null;
+
+// Получаем информацию о текущем пользователе
+fetch('/api/v1/auth/me/', {
+    headers: {
+        'Authorization': 'Bearer ' + (document.cookie.match(/csrftoken=([^;]+)/) ? '' : '{{ request.session.access_token }}')
+    }
+})
+.then(response => response.json())
+.then(data => {
+    currentUser = data.id;
+    loadChat();
+});
+
+function loadChat() {
+    // Создаем или получаем чат
+    fetch(`/api/v1/orders/${orderId}/chat/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Authorization': 'Bearer {{ request.session.access_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.id) {
+            window.chatId = data.id;
+            loadMessages();
+            // Обновляем сообщения каждые 3 секунды
+            setInterval(loadMessages, 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка создания чата:', error);
+        document.getElementById('chatMessages').innerHTML = 
+            '<div class="alert alert-danger">Ошибка загрузки чата</div>';
+    });
+}
+
+function loadMessages() {
+    if (!window.chatId) return;
+    
+    fetch(`/api/v1/orders/chats/${window.chatId}/`, {
+        headers: {
+            'Authorization': 'Bearer {{ request.session.access_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const messagesContainer = document.getElementById('chatMessages');
+        messagesContainer.innerHTML = '';
+        
+        if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(message => {
+                const isOwn = message.sender === currentUser;
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+                messageDiv.innerHTML = `
+                    <div class="message-header">
+                        ${message.sender_username} (${message.sender_role})
+                    </div>
+                    <div>${escapeHtml(message.message)}</div>
+                    <div style="font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.7;">
+                        ${new Date(message.created_at).toLocaleString('ru-RU')}
+                    </div>
+                `;
+                messagesContainer.appendChild(messageDiv);
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            messagesContainer.innerHTML = '<div class="text-center text-muted">Нет сообщений</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки сообщений:', error);
+    });
+}
+
+document.getElementById('chatForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (!window.chatId) {
+        alert('Чат еще не загружен');
+        return;
+    }
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    fetch(`/api/v1/orders/chats/${window.chatId}/messages/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Authorization': 'Bearer {{ request.session.access_token }}'
+        },
+        body: JSON.stringify({ message: message })
+    })
+    .then(response => response.json())
+    .then(data => {
+        messageInput.value = '';
+        loadMessages();
+    })
+    .catch(error => {
+        console.error('Ошибка отправки сообщения:', error);
+        alert('Ошибка отправки сообщения');
+    });
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+</script>
+{% endblock %}
+{% endblock %}
+

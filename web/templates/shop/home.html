@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}Главная - Спортивный магазин{% endblock %}
+
+{% block content %}
+<!-- Hero секция -->
+<div class="hero-section text-white text-center particles-bg">
+    <div class="container">
+        <h1 class="typewriter" data-text="Добро пожаловать в СпортМаг">Добро пожаловать в СпортМаг</h1>
+        <p>Лучшие спортивные товары для вашего активного образа жизни</p>
+        <div class="d-flex gap-3 justify-content-center flex-wrap">
+            <a href="{% url 'shop:product_list' %}" class="btn btn-hero-catalog btn-lg magnetic-btn">
+                <i class="bi bi-arrow-right-circle me-2"></i>Перейти в каталог
+            </a>
+            {% if not request.session.access_token %}
+            <a href="{% url 'shop:register' %}" class="btn btn-outline-light btn-lg magnetic-btn">
+                <i class="bi bi-person-plus me-2"></i>Регистрация
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Маркетинговый блок с преимуществами -->
+<div class="container my-5">
+    <div class="row g-4 animate-on-scroll">
+        <div class="col-md-3 col-sm-6 text-center">
+            <div class="card h-100 border-0 shadow-sm float-animation">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-truck" style="font-size: 3rem; color: var(--primary-color);"></i>
+                    </div>
+                    <h5 class="fw-bold">Быстрая доставка</h5>
+                    <p class="text-muted small mb-0">Доставка по всей России</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <div class="card h-100 border-0 shadow-sm float-animation" style="animation-delay: 0.2s;">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-check" style="font-size: 3rem; color: var(--success-color);"></i>
+                    </div>
+                    <h5 class="fw-bold">Гарантия качества</h5>
+                    <p class="text-muted small mb-0">Официальная гарантия</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <div class="card h-100 border-0 shadow-sm float-animation" style="animation-delay: 0.4s;">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-currency-exchange" style="font-size: 3rem; color: var(--warning-color);"></i>
+                    </div>
+                    <h5 class="fw-bold">Лучшие цены</h5>
+                    <p class="text-muted small mb-0">Конкурентные цены</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <div class="card h-100 border-0 shadow-sm float-animation" style="animation-delay: 0.6s;">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-headset" style="font-size: 3rem; color: var(--info-color);"></i>
+                    </div>
+                    <h5 class="fw-bold">Поддержка 24/7</h5>
+                    <p class="text-muted small mb-0">Всегда на связи</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Популярные категории -->
+{% if categories %}
+<div class="mb-5 animate-on-scroll">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0 gradient-text" style="font-size: 32px; text-transform: uppercase; letter-spacing: 1px;">Популярные категории</h2>
+        <a href="{% url 'shop:product_list' %}" class="text-decoration-none" style="color: var(--primary-color); font-weight: 600; transition: var(--transition);">
+            Все категории <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+    <div class="row g-4">
+        {% for category in categories %}
+        <div class="col-md-4 col-sm-6">
+            <div class="card h-100 text-center category-card animate-on-scroll" style="animation-delay: {{ forloop.counter0|add:'0.1' }}s;">
+                <div class="card-body d-flex flex-column p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-grid-3x3-gap" style="font-size: 2.5rem; color: var(--primary-color);"></i>
+                    </div>
+                    <h5 class="card-title fw-bold mb-3" style="font-size: 20px;">{{ category.name|default:category.name }}</h5>
+                    <p class="card-text text-muted small flex-grow-1 mb-3">{{ category.description|default:"Качественные товары для спорта"|truncatewords:15 }}</p>
+                    <a href="{% url 'shop:product_list_by_category' category.slug|default:category.id %}" class="btn btn-primary mt-auto magnetic-btn">
+                        <i class="bi bi-eye me-2"></i>Смотреть товары
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Популярные товары -->
+{% if products %}
+<div class="mb-5 animate-on-scroll">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0 gradient-text" style="font-size: 32px; text-transform: uppercase; letter-spacing: 1px;">Популярные товары</h2>
+        <a href="{% url 'shop:product_list' %}" class="text-decoration-none" style="color: var(--primary-color); font-weight: 600; transition: var(--transition);">
+            Все товары <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+    <div class="row g-4">
+        {% for product in products %}
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="card product-card h-100 animate-on-scroll" style="animation-delay: {{ forloop.counter0|add:'0.1' }}s;">
+                {% if product.image_url %}
+                <div class="position-relative overflow-hidden" style="height: 200px;">
+                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}" style="height: 200px; object-fit: cover; width: 100%;">
+                    {% if product.stock_quantity == 0 %}
+                    <div class="position-absolute top-0 end-0 m-2">
+                        <span class="badge bg-danger animated-badge">Нет в наличии</span>
+                    </div>
+                    {% elif product.stock_quantity < 5 %}
+                    <div class="position-absolute top-0 start-0 m-2">
+                        <span class="badge bg-warning animated-badge">Осталось мало!</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px; background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);">
+                    <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                </div>
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title fw-bold">{{ product.name }}</h5>
+                    <p class="card-text text-muted small mb-3">{{ product.description|truncatewords:10|default:"Описание отсутствует" }}</p>
+                    <div class="mt-auto">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="price">{{ product.price }} ₽</span>
+                            {% if product.stock_quantity > 0 %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle me-1"></i>В наличии
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-x-circle me-1"></i>Нет в наличии
+                            </span>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'shop:product_detail' product.id %}" class="btn btn-primary w-100 magnetic-btn">
+                            <i class="bi bi-eye me-2"></i>Подробнее
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center mt-4">
+        <a href="{% url 'shop:product_list' %}" class="btn btn-outline-primary btn-lg">
+            Смотреть все товары
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+

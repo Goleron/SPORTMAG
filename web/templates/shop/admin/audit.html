@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Журнал аудита - Админ-панель{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-shield-check"></i> Журнал аудита
+        </h1>
+        
+        <!-- Фильтры -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-2">
+                        <label for="action" class="form-label">Действие</label>
+                        <select class="form-select" name="action" id="action">
+                            <option value="">Все</option>
+                            <option value="CREATE" {% if filters.action == 'CREATE' %}selected{% endif %}>Создание</option>
+                            <option value="UPDATE" {% if filters.action == 'UPDATE' %}selected{% endif %}>Обновление</option>
+                            <option value="DELETE" {% if filters.action == 'DELETE' %}selected{% endif %}>Удаление</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="table_name" class="form-label">Таблица</label>
+                        <input type="text" class="form-control" name="table_name" id="table_name" value="{{ filters.table_name }}" placeholder="users, products...">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="date_from" class="form-label">Дата от</label>
+                        <input type="date" class="form-control" name="date_from" id="date_from" value="{{ filters.date_from }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="date_to" class="form-label">Дата до</label>
+                        <input type="date" class="form-control" name="date_to" id="date_to" value="{{ filters.date_to }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-funnel"></i> Применить фильтры
+                            </button>
+                            <a href="{% url 'shop:admin_audit' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Сбросить
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Таблица аудита -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Время</th>
+                                <th>Действие</th>
+                                <th>Таблица</th>
+                                <th>ID записи</th>
+                                <th>Пользователь</th>
+                                <th>Детали</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for audit in audit_logs %}
+                            <tr>
+                                <td>{{ audit.id }}</td>
+                                <td>{{ audit.ts|date:"d.m.Y H:i:s" }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if audit.action == 'CREATE' %}bg-success
+                                        {% elif audit.action == 'UPDATE' %}bg-warning
+                                        {% elif audit.action == 'DELETE' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ audit.action_display|default:audit.action }}
+                                    </span>
+                                </td>
+                                <td><code>{{ audit.table_name }}</code></td>
+                                <td>{{ audit.record_id|default:"—" }}</td>
+                                <td>
+                                    {% if audit.user_username %}
+                                        {{ audit.user_username }}
+                                    {% elif audit.user_id %}
+                                        ID: {{ audit.user_id }}
+                                    {% elif audit.user %}
+                                        {% if audit.user.username %}
+                                            {{ audit.user.username }}
+                                        {% elif audit.user.id %}
+                                            ID: {{ audit.user.id }}
+                                        {% else %}
+                                            {{ audit.user }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            data-audit-id="{{ audit.id }}"
+                                            data-old-data='{{ audit.old_data|default:"{}" }}'
+                                            data-new-data='{{ audit.new_data|default:"{}" }}'
+                                            onclick="showAuditDetailsFromButton(this)">
+                                        <i class="bi bi-eye"></i> Показать
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Записи аудита не найдены</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Пагинация -->
+                {% if pagination.next or pagination.previous %}
+                <nav aria-label="Навигация по страницам">
+                    <ul class="pagination justify-content-center">
+                        {% if pagination.previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ pagination.previous }}">Предыдущая</a>
+                        </li>
+                        {% endif %}
+                        {% if pagination.next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ pagination.next }}">Следующая</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для деталей -->
+<div class="modal fade" id="auditDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали изменения</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Старые данные:</h6>
+                        <pre id="oldData" class="bg-light p-3" style="max-height: 300px; overflow-y: auto;"></pre>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Новые данные:</h6>
+                        <pre id="newData" class="bg-light p-3" style="max-height: 300px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showAuditDetailsFromButton(button) {
+    const oldDataStr = button.getAttribute('data-old-data');
+    const newDataStr = button.getAttribute('data-new-data');
+    
+    let oldDataText = 'Нет данных';
+    let newDataText = 'Нет данных';
+    
+    try {
+        if (oldDataStr && oldDataStr !== '{}' && oldDataStr !== 'null' && oldDataStr !== 'None' && oldDataStr.trim() !== '') {
+            const parsed = JSON.parse(oldDataStr);
+            oldDataText = JSON.stringify(parsed, null, 2);
+        }
+    } catch (e) {
+        console.error('Error parsing oldData:', e, oldDataStr);
+        oldDataText = oldDataStr || 'Нет данных';
+    }
+    
+    try {
+        if (newDataStr && newDataStr !== '{}' && newDataStr !== 'null' && newDataStr !== 'None' && newDataStr.trim() !== '') {
+            const parsed = JSON.parse(newDataStr);
+            newDataText = JSON.stringify(parsed, null, 2);
+        }
+    } catch (e) {
+        console.error('Error parsing newData:', e, newDataStr);
+        newDataText = newDataStr || 'Нет данных';
+    }
+    
+    document.getElementById('oldData').textContent = oldDataText;
+    document.getElementById('newData').textContent = newDataText;
+    const modal = new bootstrap.Modal(document.getElementById('auditDetailsModal'));
+    modal.show();
+}
+</script>
+{% endblock %}
+

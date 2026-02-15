@@ -1,0 +1,359 @@
+{% extends 'base.html' %}
+
+{% block title %}Управление пользователями - Админ-панель{% endblock %}
+
+{% block extra_head %}
+{% if request.session.access_token %}
+<meta name="access-token" content="{{ request.session.access_token }}">
+{% endif %}
+<meta name="api-base-url" content="{{ api_base_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление пользователями</h2>
+    <div class="btn-group">
+        <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">Назад</a>
+        <button class="btn btn-primary" id="addUserBtn">
+            <i class="bi bi-plus-circle"></i> Добавить пользователя
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="get" action="{% url 'shop:admin_users' %}" class="mb-3 row g-2 align-items-end">
+            <div class="col-md-8">
+                <label for="userSearch" class="form-label visually-hidden">Поиск</label>
+                <input type="text" class="form-control" id="userSearch" name="search" placeholder="Поиск по имени пользователя или email..." value="{{ search_query|default:'' }}" autocomplete="off">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-outline-primary me-2"><i class="bi bi-search"></i> Искать</button>
+                {% if search_query %}
+                <a href="{% url 'shop:admin_users' %}" class="btn btn-outline-secondary">Сбросить</a>
+                {% endif %}
+            </div>
+        </form>
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя пользователя</th>
+                        <th>Email</th>
+                        <th>Роль</th>
+                        <th>Активен</th>
+                        <th>Дата регистрации</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td><strong>{{ user.username }}</strong></td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% with role_display=user.role_name|default:"-" %}
+                                {% if role_display == 'Admin' %}
+                                <span class="badge bg-danger">{{ role_display }}</span>
+                                {% elif role_display == 'Analyst' %}
+                                <span class="badge bg-warning text-dark">{{ role_display }}</span>
+                                {% else %}
+                                <span class="badge bg-primary">{{ role_display }}</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                            <span class="badge bg-success">Да</span>
+                            {% else %}
+                            <span class="badge bg-danger">Нет</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at_formatted|default:user.created_at|default:"-" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editUser({{ user.id }})" data-user-id="{{ user.id }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser({{ user.id }})" data-user-id="{{ user.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Пользователи не найдены</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно для добавления/редактирования пользователя -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">Добавить пользователя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="userId" name="user_id">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="userUsername" class="form-label">Имя пользователя *</label>
+                            <input type="text" class="form-control" id="userUsername" name="username" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="userEmail" class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="userEmail" name="email" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="userPassword" class="form-label">Пароль <span id="passwordRequired">*</span></label>
+                            <input type="password" class="form-control" id="userPassword" name="password">
+                            <div class="form-text" id="passwordHelp">Оставьте пустым при редактировании, чтобы не менять пароль</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="userRole" class="form-label">Роль *</label>
+                            <select class="form-select" id="userRole" name="role" required>
+                                <option value="">Выберите роль</option>
+                                {% for role in roles %}
+                                <option value="{{ role.id }}">{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="userIsActive" name="is_active" checked>
+                            <label class="form-check-label" for="userIsActive">Пользователь активен</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveUserBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+let currentUserId = null;
+
+function editUser(userId) {
+    if (!userId || isNaN(userId)) {
+        alert('Ошибка: неверный ID пользователя');
+        return;
+    }
+    
+    currentUserId = userId;
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/users/${userId}/`;
+    const modalElement = document.getElementById('userModal');
+    const modal = new bootstrap.Modal(modalElement);
+    document.getElementById('userModalTitle').textContent = 'Редактировать пользователя';
+    document.getElementById('userId').value = userId;
+    
+    // Пароль не обязателен при редактировании
+    document.getElementById('passwordRequired').style.display = 'none';
+    document.getElementById('passwordHelp').textContent = 'Оставьте пустым, чтобы не менять пароль';
+    document.getElementById('userPassword').required = false;
+    
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = userId;
+    
+    modal.show();
+    const modalBody = modalElement.querySelector('.modal-body');
+    const originalContent = modalBody.innerHTML;
+    modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div><p class="mt-2">Загрузка данных пользователя...</p></div>';
+    
+    fetch(url, {
+        method: 'GET',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        modalBody.innerHTML = originalContent;
+        
+        document.getElementById('userUsername').value = data.username || '';
+        document.getElementById('userEmail').value = data.email || '';
+        
+        // Обрабатываем роль (может быть объект или ID)
+        const roleId = data.role?.id || data.role_id || data.role || '';
+        document.getElementById('userRole').value = roleId;
+        
+        document.getElementById('userIsActive').checked = data.is_active !== false;
+        
+        // Пароль не заполняем при редактировании
+        document.getElementById('userPassword').value = '';
+        
+        console.log('User data loaded:', data);
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки пользователя:', error);
+        modalBody.innerHTML = originalContent;
+        modal.hide();
+        alert('Ошибка загрузки данных пользователя: ' + error.message);
+    });
+}
+
+function deleteUser(userId) {
+    if (!confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.')) {
+        return;
+    }
+    
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    const url = `${apiBaseUrl}/users/${userId}/`;
+    
+    fetch(url, {
+        method: 'DELETE',
+        headers: headers,
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.status === 204 ? {} : response.json();
+    })
+    .then(() => {
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Ошибка удаления пользователя:', error);
+        alert('Ошибка удаления пользователя: ' + error.message);
+    });
+}
+
+// Обработчик кнопки "Добавить пользователя"
+document.getElementById('addUserBtn')?.addEventListener('click', function() {
+    currentUserId = null;
+    document.getElementById('userModalTitle').textContent = 'Добавить пользователя';
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+    
+    // Пароль обязателен при создании
+    document.getElementById('passwordRequired').style.display = 'inline';
+    document.getElementById('passwordHelp').textContent = 'Минимум 8 символов';
+    document.getElementById('userPassword').required = true;
+    
+    const modal = new bootstrap.Modal(document.getElementById('userModal'));
+    modal.show();
+});
+
+// Обработчик сохранения
+document.getElementById('saveUserBtn')?.addEventListener('click', function() {
+    const form = document.getElementById('userForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key === 'user_id') continue;
+        if (key === 'password' && !value && currentUserId) continue; // Пропускаем пустой пароль при редактировании
+        if (key === 'is_active') {
+            data[key] = document.getElementById('userIsActive').checked;
+        } else {
+            data[key] = value;
+        }
+    }
+    
+    const userId = document.getElementById('userId').value;
+    const apiBaseUrl = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api/v1';
+    const url = userId ? `${apiBaseUrl}/users/${userId}/` : `${apiBaseUrl}/users/`;
+    const method = userId ? 'PUT' : 'POST';
+    
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    const accessToken = document.querySelector('meta[name="access-token"]')?.content;
+    if (accessToken) {
+        headers['Authorization'] = 'Bearer ' + accessToken;
+    }
+    
+    fetch(url, {
+        method: method,
+        headers: headers,
+        body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'include'
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await response.json();
+                throw new Error(err.detail || err.error || `HTTP error! status: ${response.status}`);
+            }
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.id || data.username) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка сохранения пользователя: ' + error.message);
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

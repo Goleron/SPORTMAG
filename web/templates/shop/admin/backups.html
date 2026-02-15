@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Резервные копии - Админ-панель{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-database"></i> Резервные копии
+            </h1>
+            <a href="{% url 'shop:admin_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Назад к панели
+            </a>
+        </div>
+        
+        <!-- Создание бэкапа -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Создать резервную копию</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="create_backup" value="1">
+                    <div class="row align-items-end">
+                        <div class="col-md-8">
+                            <label for="description" class="form-label">Описание (необязательно)</label>
+                            <input type="text" class="form-control" name="description" id="description" 
+                                   placeholder="Например: Ежедневное резервное копирование">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100" id="createBackupBtn">
+                                <i class="bi bi-database-add"></i> Создать резервную копию
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Настройки автоматических бекапов -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Настройки автоматических резервных копий</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="save_schedule" value="1">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="schedule_enabled" class="form-label">Автоматические бекапы</label>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="schedule_enabled" 
+                                       name="schedule_enabled" {% if schedule.is_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="schedule_enabled">Включить</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="schedule_frequency" class="form-label">Частота</label>
+                            <select class="form-select" id="schedule_frequency" name="schedule_frequency">
+                                <option value="daily" {% if schedule.frequency == 'daily' %}selected{% endif %}>Ежедневно</option>
+                                <option value="weekly" {% if schedule.frequency == 'weekly' %}selected{% endif %}>Еженедельно</option>
+                                <option value="monthly" {% if schedule.frequency == 'monthly' %}selected{% endif %}>Ежемесячно</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="schedule_time" class="form-label">Время</label>
+                            <input type="time" class="form-control" id="schedule_time" 
+                                   name="schedule_time" value="{{ schedule.time|default:'02:00' }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="schedule_keep_days" class="form-label">Хранить (дней)</label>
+                            <input type="number" class="form-control" id="schedule_keep_days" 
+                                   name="schedule_keep_days" value="{{ schedule.keep_days|default:30 }}" min="1">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-info text-white w-100">
+                                <i class="bi bi-save"></i> Сохранить
+                            </button>
+                        </div>
+                    </div>
+                    {% if schedule.is_enabled %}
+                    <div class="alert alert-success mt-2 mb-0">
+                        <i class="bi bi-check-circle"></i> 
+                        Автоматические бекапы <strong>включены</strong>. 
+                        Частота: <strong>{{ schedule.frequency_display|default:schedule.frequency }}</strong>,
+                        время: <strong>{{ schedule.time|default:"02:00" }}</strong>.
+                        Бекапы хранятся <strong>{{ schedule.keep_days|default:30 }}</strong> дней.
+                        {% if schedule.last_run %}
+                        <br>Последний запуск: {{ schedule.last_run }}
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-2 mb-0">
+                        <i class="bi bi-exclamation-triangle"></i> Автоматические бекапы <strong>отключены</strong>.
+                    </div>
+                    {% endif %}
+                    <div class="form-text mt-2">
+                        <i class="bi bi-info-circle"></i> 
+                        Для автоматического запуска бекапов добавьте в планировщик задач команду:
+                        <code>python manage.py run_scheduled_backup</code>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Список бэкапов -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список резервных копий ({{ backups|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Время создания</th>
+                                <th>Путь к файлу</th>
+                                <th>Статус</th>
+                                <th>Создано</th>
+                                <th>Описание</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in backups %}
+                            <tr>
+                                <td>{{ backup.id }}</td>
+                                <td>{{ backup.ts }}</td>
+                                <td><code>{{ backup.file_path|truncatechars:50 }}</code></td>
+                                <td>
+                                    <span class="badge 
+                                        {% if backup.status == 'Completed' %}bg-success
+                                        {% elif backup.status == 'Failed' %}bg-danger
+                                        {% else %}bg-warning{% endif %}">
+                                        {{ backup.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if backup.created_by %}
+                                        {% if backup.created_by.username %}
+                                            {{ backup.created_by.username }}
+                                        {% else %}
+                                            {{ backup.created_by }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Система</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ backup.description|default:"—" }}</td>
+                                <td>
+                                    {% if backup.status == 'Completed' %}
+                                    <div class="btn-group" role="group">
+                                        <a href="{% url 'shop:admin_download_backup' backup.id %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download"></i> Скачать
+                                        </a>
+                                        <form method="post" style="display: inline;" 
+                                              onsubmit="return confirm('Вы уверены, что хотите восстановить базу данных из этой резервной копии? Это действие перезапишет текущие данные.');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="restore_backup" value="1">
+                                            <input type="hidden" name="backup_id" value="{{ backup.id }}">
+                                            <button type="submit" class="btn btn-sm btn-warning">
+                                                <i class="bi bi-arrow-counterclockwise"></i> Восстановить
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-database" style="font-size: 2rem;"></i>
+                                    <br>Резервные копии не найдены
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Показываем спиннер при создании бекапа
+document.getElementById('createBackupBtn')?.addEventListener('click', function() {
+    const btn = this;
+    setTimeout(function() {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Создание бекапа...';
+        btn.disabled = true;
+    }, 100);
+});
+</script>
+{% endblock %}

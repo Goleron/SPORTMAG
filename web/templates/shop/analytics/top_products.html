@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Топ товаров - Аналитика{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Топ товаров</h2>
+    <a href="{% url 'shop:analytics_dashboard' %}" class="btn btn-outline-secondary">Назад к дашборду</a>
+</div>
+
+<!-- Фильтр по количеству -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="limit" class="form-label">Количество товаров</label>
+                <input type="number" name="limit" id="limit" class="form-control" value="{{ limit }}" min="1" max="100">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">Применить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица топ товаров -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Топ {{ limit }} товаров</h5>
+        <a href="{% url 'shop:analytics_export_top_products_csv' %}?limit={{ limit }}" 
+           class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-download"></i> Экспорт CSV
+        </a>
+    </div>
+    <div class="card-body">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Место</th>
+                        <th>Товар</th>
+                        <th>Продано</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>
+                            {% if forloop.counter == 1 %}
+                            <span class="badge bg-warning text-dark">🥇</span>
+                            {% elif forloop.counter == 2 %}
+                            <span class="badge bg-secondary">🥈</span>
+                            {% elif forloop.counter == 3 %}
+                            <span class="badge bg-warning">🥉</span>
+                            {% else %}
+                            <strong>#{{ forloop.counter }}</strong>
+                            {% endif %}
+                        </td>
+                        <td>{{ product.product_name }}</td>
+                        <td><strong>{{ product.qty_sold }}</strong> шт.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Нет данных</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

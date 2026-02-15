@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Корзина - Спортивный магазин{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Корзина покупок</h2>
+
+{% if cart_items %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                {% for cart_item_data in cart_items_with_totals %}
+                {% with item=cart_item_data.item item_total=cart_item_data.total %}
+                <div class="row align-items-center mb-3 pb-3 border-bottom">
+                    <div class="col-md-2">
+                        {% if item.product.image_url %}
+                        <img src="{{ item.product.image_url }}" class="img-fluid rounded" alt="{{ item.product.name }}">
+                        {% else %}
+                        <div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 80px;">
+                            <i class="bi bi-image text-muted"></i>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-1">{{ item.product.name }}</h6>
+                        <p class="text-muted small mb-0">{{ item.product.price }} ₽ за шт.</p>
+                    </div>
+                    <div class="col-md-3">
+                        <form method="post" action="{% url 'shop:update_cart' item.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <div class="input-group">
+                                <input type="number" name="quantity" class="form-control" value="{{ item.quantity }}" min="1" max="{{ item.product.stock_quantity|default:999 }}">
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">Обновить</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <strong>{{ item_total|floatformat:2 }} ₽</strong>
+                    </div>
+                    <div class="col-md-1">
+                        <form method="post" action="{% url 'shop:remove_from_cart' item.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить товар из корзины?')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endwith %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Итого</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Товаров:</span>
+                    <strong>{{ cart_items|length }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Общая сумма:</span>
+                    <strong class="h5 text-primary">{{ total|floatformat:2 }} ₽</strong>
+                </div>
+                <a href="{% url 'shop:checkout' %}" class="btn btn-primary btn-lg w-100">
+                    Оформить заказ
+                </a>
+                <a href="{% url 'shop:product_list' %}" class="btn btn-outline-secondary w-100 mt-2">
+                    Продолжить покупки
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info text-center">
+    <h5>Корзина пуста</h5>
+    <p>Добавьте товары в корзину, чтобы продолжить покупки.</p>
+    <a href="{% url 'shop:product_list' %}" class="btn btn-primary">Перейти в каталог</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Автоматический расчет суммы для каждого товара
+document.querySelectorAll('input[name="quantity"]').forEach(input => {
+    input.addEventListener('change', function() {
+        const form = this.closest('form');
+        if (form) {
+            form.submit();
+        }
+    });
+});
+</script>
+{% endblock %}
+
